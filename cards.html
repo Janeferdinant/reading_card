@@ -1,0 +1,208 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="text-center mb-4">Interactive Reading Cards</h1>
+    
+    <div class="mb-4">
+        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">⬅ Back to Home</a>
+        <button id="study-mode-toggle" class="btn btn-primary float-end">Toggle Study Mode</button>
+    </div>
+    
+    <div id="cards-container" class="row">
+        {% for card in cards %}
+        <div class="col-md-6 mb-4">
+            <div class="card reading-card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Card #{{ card.id + 1 }}</span>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input card-learned-toggle" type="checkbox" id="card-learned-{{ card.id }}">
+                        <label class="form-check-label" for="card-learned-{{ card.id }}">Learned</label>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">{{ card.content }}</p>
+                    
+                    <div class="mt-3">
+                        <strong>Keywords:</strong>
+                        <div class="d-flex flex-wrap gap-1 mt-1">
+                            {% for keyword in card.keywords %}
+                            <span class="badge bg-secondary">{{ keyword }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer d-flex justify-content-between">
+                    <button class="btn btn-sm btn-outline-secondary note-btn" data-card-id="{{ card.id }}">Add Note</button>
+                    <div class="highlight-controls">
+                        <button class="btn btn-sm btn-outline-warning highlight-btn" data-card-id="{{ card.id }}">Highlight</button>
+                    </div>
+                </div>
+                <div class="note-container p-3 d-none" id="note-container-{{ card.id }}">
+                    <div class="form-group">
+                        <textarea class="form-control note-textarea" id="note-{{ card.id }}" rows="3" placeholder="Add your notes here..."></textarea>
+                    </div>
+                    <div class="d-flex justify-content-end mt-2">
+                        <button class="btn btn-sm btn-success save-note-btn" data-card-id="{{ card.id }}">Save Note</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize notes from localStorage
+        const savedNotes = JSON.parse(localStorage.getItem('readingCardNotes') || '{}');
+        const savedLearned = JSON.parse(localStorage.getItem('readingCardLearned') || '{}');
+        const cardId = window.location.pathname.split('/').pop();
+        
+        // Set up note buttons
+        document.querySelectorAll('.note-btn').forEach(btn => {
+            const cardId = btn.dataset.cardId;
+            const noteContainer = document.getElementById(`note-container-${cardId}`);
+            const noteTextarea = document.getElementById(`note-${cardId}`);
+            
+            // Load saved notes
+            if (savedNotes[cardId]) {
+                noteTextarea.value = savedNotes[cardId];
+            }
+            
+            btn.addEventListener('click', () => {
+                noteContainer.classList.toggle('d-none');
+            });
+        });
+        
+        // Set up save note buttons
+        document.querySelectorAll('.save-note-btn').forEach(btn => {
+            const cardId = btn.dataset.cardId;
+            
+            btn.addEventListener('click', () => {
+                const noteTextarea = document.getElementById(`note-${cardId}`);
+                const noteContainer = document.getElementById(`note-container-${cardId}`);
+                
+                // Save to localStorage
+                const savedNotes = JSON.parse(localStorage.getItem('readingCardNotes') || '{}');
+                savedNotes[cardId] = noteTextarea.value;
+                localStorage.setItem('readingCardNotes', JSON.stringify(savedNotes));
+                
+                // Hide the note container
+                noteContainer.classList.add('d-none');
+                
+                // Show feedback
+                const toast = document.createElement('div');
+                toast.className = 'toast align-items-center text-white bg-success border-0 position-fixed bottom-0 end-0 m-3';
+                toast.setAttribute('role', 'alert');
+                toast.setAttribute('aria-live', 'assertive');
+                toast.setAttribute('aria-atomic', 'true');
+                toast.innerHTML = `
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            Note saved successfully!
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                `;
+                document.body.appendChild(toast);
+                
+                const bsToast = new bootstrap.Toast(toast);
+                bsToast.show();
+                
+                setTimeout(() => {
+                    toast.remove();
+                }, 3000);
+            });
+        });
+        
+        // Set up learned toggles
+        document.querySelectorAll('.card-learned-toggle').forEach(toggle => {
+            const cardId = toggle.id.split('-').pop();
+            
+            // Load saved state
+            if (savedLearned[cardId]) {
+                toggle.checked = true;
+                toggle.closest('.reading-card').classList.add('card-learned');
+            }
+            
+            toggle.addEventListener('change', () => {
+                const card = toggle.closest('.reading-card');
+                const savedLearned = JSON.parse(localStorage.getItem('readingCardLearned') || '{}');
+                
+                if (toggle.checked) {
+                    card.classList.add('card-learned');
+                    savedLearned[cardId] = true;
+                } else {
+                    card.classList.remove('card-learned');
+                    delete savedLearned[cardId];
+                }
+                
+                localStorage.setItem('readingCardLearned', JSON.stringify(savedLearned));
+            });
+        });
+        
+        // Set up highlight buttons
+        document.querySelectorAll('.highlight-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const cardId = btn.dataset.cardId;
+                const card = btn.closest('.reading-card');
+                card.classList.toggle('highlighted');
+            });
+        });
+        
+        // Set up study mode toggle
+        const studyModeToggle = document.getElementById('study-mode-toggle');
+        const cardsContainer = document.getElementById('cards-container');
+        
+        // Check if study mode was previously enabled
+        if (localStorage.getItem('readingCardStudyMode') === 'true') {
+            cardsContainer.classList.add('study-mode');
+            studyModeToggle.textContent = 'Exit Study Mode';
+        }
+        
+        studyModeToggle.addEventListener('click', () => {
+            const isStudyMode = cardsContainer.classList.toggle('study-mode');
+            studyModeToggle.textContent = isStudyMode ? 'Exit Study Mode' : 'Toggle Study Mode';
+            localStorage.setItem('readingCardStudyMode', isStudyMode);
+        });
+    });
+</script>
+
+<style>
+    .reading-card {
+        transition: all 0.3s ease;
+    }
+    
+    .card-learned {
+        border-left: 5px solid #198754;
+        opacity: 0.8;
+    }
+    
+    .highlighted {
+        background-color: #fff3cd;
+    }
+    
+    .note-container {
+        border-top: 1px solid rgba(0,0,0,.125);
+        background-color: #f8f9fa;
+    }
+    
+    /* Study mode styles */
+    .study-mode .reading-card {
+        cursor: pointer;
+    }
+    
+    .study-mode .card-text {
+        display: none;
+    }
+    
+    .study-mode .reading-card.active .card-text {
+        display: block;
+    }
+    
+    .study-mode .reading-card:not(.card-learned):not(.active) {
+        background-color: #e9ecef;
+    }
+</style>
+{% endblock %}
