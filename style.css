@@ -1,0 +1,62 @@
+/* Static CSS file for custom styling */
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+}
+
+.reading-card {
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+    transition: transform 0.3s ease;
+}
+
+.reading-card:hover {
+    transform: translateY(-5px);
+}
+
+.footer {
+    background-color: #f8f9fa;
+    margin-top: 50px;
+}
+
+/* Custom styles for the cards view */
+.reading-card .card-header {
+    background-color: #f0f0f0;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.reading-card .card-footer {
+    background-color: #f8f9fa;
+}
+
+/* Highlight effect for text selection */
+.reading-card .card-text::selection {
+    background-color: #ffe066;
+}
+
+/* Study mode related styles */
+.study-mode .col-md-6 {
+    width: 100%;
+    max-width: 100%;
+    flex: 0 0 100%;
+}
+
+.study-mode .reading-card {
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+    .reading-card {
+        margin-bottom: 15px;
+    }
+    
+    .col-md-6 {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+}
