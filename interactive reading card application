@@ -1,0 +1,207 @@
+# Interactive Reading Card Generator
+# app.py - Main Flask Application
+
+import os
+import uuid
+import fitz  # PyMuPDF for PDFs
+import docx2txt  # For Word documents
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
+from werkzeug.utils import secure_filename
+import re
+import nltk
+from nltk.tokenize import sent_tokenize, word_tokenize
+from nltk.corpus import stopwords
+
+# Initialize Flask application
+app = Flask(__name__)
+app.secret_key = os.urandom(24)
+app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['CARDS_FOLDER'] = 'cards'
+app.config['ALLOWED_EXTENSIONS'] = {'pdf', 'docx', 'txt'}
+
+# Create necessary directories if they don't exist
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+os.makedirs(app.config['CARDS_FOLDER'], exist_ok=True)
+
+# Download NLTK resources
+nltk.download('punkt')
+nltk.download('stopwords')
+
+def allowed_file(filename):
+    """Check if the file extension is allowed"""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
+def extract_text_from_pdf(pdf_path):
+    """Extract text from PDF files"""
+    text = ""
+    try:
+        pdf_document = fitz.open(pdf_path)
+        for page_num in range(len(pdf_document)):
+            page = pdf_document.load_page(page_num)
+            text += page.get_text()
+        pdf_document.close()
+    except Exception as e:
+        print(f"Error extracting text from PDF: {e}")
+    return text
+
+def extract_text_from_docx(docx_path):
+    """Extract text from DOCX files"""
+    try:
+        text = docx2txt.process(docx_path)
+        return text
+    except Exception as e:
+        print(f"Error extracting text from DOCX: {e}")
+        return ""
+
+def extract_text_from_file(file_path):
+    """Extract text based on file type"""
+    file_extension = file_path.split('.')[-1].lower()
+    
+    if file_extension == 'pdf':
+        return extract_text_from_pdf(file_path)
+    elif file_extension == 'docx':
+        return extract_text_from_docx(file_path)
+    elif file_extension == 'txt':
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except Exception as e:
+            print(f"Error reading text file: {e}")
+            return ""
+    return ""
+
+def generate_reading_cards(text, min_sentence_length=10):
+    """Generate reading cards from text"""
+    cards = []
+    
+    # Split text into sentences
+    sentences = sent_tokenize(text)
+    
+    # Group sentences into paragraphs (simple approach)
+    paragraphs = []
+    current_paragraph = []
+    
+    for sentence in sentences:
+        # Skip short sentences or likely headers
+        if len(sentence.split()) < min_sentence_length:
+            if current_paragraph:
+                paragraphs.append(" ".join(current_paragraph))
+                current_paragraph = []
+            continue
+            
+        current_paragraph.append(sentence)
+        
+        # If paragraph gets too long, split it
+        if len(current_paragraph) >= 5:
+            paragraphs.append(" ".join(current_paragraph))
+            current_paragraph = []
+    
+    # Add any remaining paragraph
+    if current_paragraph:
+        paragraphs.append(" ".join(current_paragraph))
+    
+    # Generate cards from paragraphs
+    for i, paragraph in enumerate(paragraphs):
+        if len(paragraph.split()) < min_sentence_length:
+            continue
+            
+        # Identify potential keywords
+        words = word_tokenize(paragraph.lower())
+        stop_words = set(stopwords.words('english'))
+        keywords = [word for word in words if word.isalnum() and word not in stop_words]
+        
+        # Get top 5 most common words as keywords
+        keyword_freq = {}
+        for word in keywords:
+            keyword_freq[word] = keyword_freq.get(word, 0) + 1
+        
+        top_keywords = sorted(keyword_freq.items(), key=lambda x: x[1], reverse=True)[:5]
+        top_keywords = [word for word, _ in top_keywords]
+        
+        cards.append({
+            'id': i,
+            'content': paragraph,
+            'keywords': top_keywords
+        })
+    
+    return cards
+
+@app.route('/')
+def index():
+    """Render the main page"""
+    return render_template('index.html')
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    """Handle file upload"""
+    if 'file' not in request.files:
+        flash('No file part')
+        return redirect(request.url)
+    
+    file = request.files['file']
+    
+    if file.filename == '':
+        flash('No selected file')
+        return redirect(request.url)
+    
+    if file and allowed_file(file.filename):
+        # Create a unique filename
+        filename = secure_filename(file.filename)
+        unique_filename = f"{uuid.uuid4()}_{filename}"
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+        file.save(file_path)
+        
+        # Extract text from the file
+        extracted_text = extract_text_from_file(file_path)
+        
+        if not extracted_text:
+            flash('Could not extract text from the file')
+            return redirect(request.url)
+        
+        # Generate reading cards
+        cards = generate_reading_cards(extracted_text)
+        
+        # Save cards to a file
+        cards_id = str(uuid.uuid4())
+        cards_file = os.path.join(app.config['CARDS_FOLDER'], f"{cards_id}.json")
+        
+        import json
+        with open(cards_file, 'w', encoding='utf-8') as f:
+            json.dump(cards, f)
+        
+        return redirect(url_for('view_cards', cards_id=cards_id))
+    
+    flash('Invalid file type')
+    return redirect(request.url)
+
+@app.route('/cards/<cards_id>')
+def view_cards(cards_id):
+    """View generated cards"""
+    cards_file = os.path.join(app.config['CARDS_FOLDER'], f"{cards_id}.json")
+    
+    if not os.path.exists(cards_file):
+        flash('Cards not found')
+        return redirect(url_for('index'))
+    
+    import json
+    with open(cards_file, 'r', encoding='utf-8') as f:
+        cards = json.load(f)
+    
+    return render_template('cards.html', cards=cards)
+
+@app.route('/api/cards/<cards_id>')
+def get_cards(cards_id):
+    """API endpoint to get cards data"""
+    cards_file = os.path.join(app.config['CARDS_FOLDER'], f"{cards_id}.json")
+    
+    if not os.path.exists(cards_file):
+        return jsonify({'error': 'Cards not found'}), 404
+    
+    import json
+    with open(cards_file, 'r', encoding='utf-8') as f:
+        cards = json.load(f)
+    
+    return jsonify(cards)
+
+if __name__ == '__main__':
+    app.run(debug=True)
