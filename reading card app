@@ -1,0 +1,325 @@
+import React, { useState, useEffect } from 'react';
+import { Upload, Moon, Sun, Search, Filter, Download, Plus, X } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+// Sample data for the chart
+const chartData = [
+  { name: 'Jan', cards: 4 },
+  { name: 'Feb', cards: 7 },
+  { name: 'Mar', cards: 12 },
+  { name: 'Apr', cards: 15 },
+  { name: 'May', cards: 18 },
+];
+
+// Sample reading cards data
+const initialCards = [
+  { 
+    id: 1, 
+    title: 'React Hooks Overview', 
+    content: 'Hooks are functions that let you "hook into" React state and lifecycle features from function components.',
+    tags: ['react', 'frontend', 'hooks'],
+    dateCreated: '2025-04-15',
+    source: 'React Documentation'
+  },
+  { 
+    id: 2, 
+    title: 'Modern JavaScript Features', 
+    content: 'ES6+ introduced many features like arrow functions, destructuring, spread operator, and template literals that revolutionized JavaScript development.',
+    tags: ['javascript', 'es6', 'frontend'],
+    dateCreated: '2025-04-18',
+    source: 'JavaScript: The Definitive Guide'
+  },
+  { 
+    id: 3, 
+    title: 'Tailwind CSS Benefits', 
+    content: 'Tailwind CSS is a utility-first CSS framework that allows for rapid UI development through composable utility classes.',
+    tags: ['css', 'tailwind', 'frontend'],
+    dateCreated: '2025-05-02',
+    source: 'Tailwind Documentation'
+  },
+];
+
+export default function App() {
+  const [darkMode, setDarkMode] = useState(false);
+  const [cards, setCards] = useState(initialCards);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [processing, setProcessing] = useState(false);
+  const [activeTab, setActiveTab] = useState('cards');
+
+  // Toggle dark mode and update document class
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
+
+  // Filter cards based on search term
+  const filteredCards = cards.filter(card => 
+    card.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    card.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    card.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  // Handle file selection
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    }
+  };
+
+  // Handle file upload and processing
+  const handleFileUpload = () => {
+    if (!selectedFile) return;
+    
+    setProcessing(true);
+    
+    // Simulate processing delay
+    setTimeout(() => {
+      // Create new sample card from the uploaded file
+      const newCard = {
+        id: cards.length + 1,
+        title: selectedFile.name.replace(/\.[^/.]+$/, ""), // Remove file extension
+        content: 'This card was generated from your uploaded document. Content would be extracted from the document.',
+        tags: ['new', 'uploaded'],
+        dateCreated: new Date().toISOString().split('T')[0],
+        source: selectedFile.name
+      };
+      
+      setCards([...cards, newCard]);
+      setSelectedFile(null);
+      setShowUploadModal(false);
+      setProcessing(false);
+    }, 1500);
+  };
+
+  // Handle card deletion
+  const deleteCard = (id) => {
+    setCards(cards.filter(card => card.id !== id));
+  };
+
+  return (
+    <div className={`min-h-screen flex flex-col transition-colors duration-300 ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
+      {/* Header */}
+      <header className={`py-4 px-6 flex justify-between items-center shadow-md ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+        <div className="flex items-center space-x-2">
+          <img src="/api/placeholder/40/40" alt="Logo" className="rounded-md" />
+          <h1 className="text-xl font-bold">Reading Cards</h1>
+        </div>
+        
+        <div className="flex items-center space-x-4">
+          <button 
+            onClick={() => setDarkMode(!darkMode)}
+            className={`p-2 rounded-full ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'}`}
+          >
+            {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+          
+          <button 
+            onClick={() => setShowUploadModal(true)}
+            className={`flex items-center space-x-1 py-2 px-4 rounded-md ${darkMode ? 'bg-blue-600 hover:bg-blue-500' : 'bg-blue-500 hover:bg-blue-600'} text-white`}
+          >
+            <Upload size={16} />
+            <span>Upload</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 container mx-auto px-4 py-6">
+        {/* Tabs */}
+        <div className="flex mb-6 border-b">
+          <button 
+            className={`px-4 py-2 ${activeTab === 'cards' ? 'border-b-2 border-blue-500 font-medium' : ''}`}
+            onClick={() => setActiveTab('cards')}
+          >
+            My Cards
+          </button>
+          <button 
+            className={`px-4 py-2 ${activeTab === 'stats' ? 'border-b-2 border-blue-500 font-medium' : ''}`}
+            onClick={() => setActiveTab('stats')}
+          >
+            Statistics
+          </button>
+        </div>
+
+        {activeTab === 'cards' ? (
+          <>
+            {/* Search and Filters */}
+            <div className={`flex flex-wrap md:flex-nowrap items-center gap-4 mb-6 p-4 rounded-lg ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow`}>
+              <div className="relative flex-grow">
+                <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search cards..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className={`w-full pl-10 pr-4 py-2 rounded-md ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-300'} border focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                />
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <button className={`flex items-center space-x-1 py-2 px-3 rounded-md border ${darkMode ? 'border-gray-600 hover:bg-gray-700' : 'border-gray-300 hover:bg-gray-100'}`}>
+                  <Filter size={16} />
+                  <span>Filter</span>
+                </button>
+                
+                <button className={`flex items-center space-x-1 py-2 px-3 rounded-md border ${darkMode ? 'border-gray-600 hover:bg-gray-700' : 'border-gray-300 hover:bg-gray-100'}`}>
+                  <Download size={16} />
+                  <span>Export</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredCards.map(card => (
+                <div 
+                  key={card.id} 
+                  className={`rounded-lg overflow-hidden shadow-md border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}
+                >
+                  <div className="p-5">
+                    <div className="flex justify-between items-start">
+                      <h3 className="text-lg font-medium">{card.title}</h3>
+                      <button 
+                        onClick={() => deleteCard(card.id)}
+                        className="p-1 rounded-full hover:bg-red-100 dark:hover:bg-red-900 text-red-500"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                    <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Source: {card.source}</p>
+                    <p className="mt-3 text-sm">{card.content}</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {card.tags.map(tag => (
+                        <span 
+                          key={tag} 
+                          className={`text-xs px-2 py-1 rounded-full ${darkMode ? 'bg-blue-900 text-blue-200' : 'bg-blue-100 text-blue-800'}`}
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className={`px-5 py-3 text-xs ${darkMode ? 'bg-gray-750 text-gray-400' : 'bg-gray-50 text-gray-500'}`}>
+                    Created on {card.dateCreated}
+                  </div>
+                </div>
+              ))}
+              
+              {/* Add Card Button */}
+              <div 
+                className={`rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer h-full min-h-48 ${darkMode ? 'border-gray-700 hover:border-gray-600' : 'border-gray-300 hover:border-gray-400'}`}
+                onClick={() => setShowUploadModal(true)}
+              >
+                <div className="flex flex-col items-center py-12">
+                  <Plus size={24} className={darkMode ? 'text-gray-500' : 'text-gray-400'} />
+                  <p className={`mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Add New Card</p>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className={`p-6 rounded-lg shadow-md ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+            <h2 className="text-xl font-bold mb-4">Reading Progress</h2>
+            <div style={{ width: '100%', height: 300 }}>
+              <ResponsiveContainer>
+                <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#444' : '#ccc'} />
+                  <XAxis dataKey="name" stroke={darkMode ? '#aaa' : '#666'} />
+                  <YAxis stroke={darkMode ? '#aaa' : '#666'} />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: darkMode ? '#333' : '#fff', 
+                      border: `1px solid ${darkMode ? '#555' : '#ddd'}`,
+                      color: darkMode ? '#eee' : '#333'
+                    }} 
+                  />
+                  <Line type="monotone" dataKey="cards" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            
+            <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Total Cards</p>
+                <p className="text-2xl font-bold">{cards.length}</p>
+              </div>
+              <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>This Month</p>
+                <p className="text-2xl font-bold">3</p>
+              </div>
+              <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Avg. Per Week</p>
+                <p className="text-2xl font-bold">1.2</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* Footer */}
+      <footer className={`py-4 px-6 text-center ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-500'}`}>
+        <p className="text-sm">© 2025 Reading Cards App. All rights reserved.</p>
+      </footer>
+
+      {/* Upload Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <div className={`w-full max-w-md rounded-lg shadow-xl ${darkMode ? 'bg-gray-800' : 'bg-white'} p-6`}>
+            <h3 className="text-lg font-medium mb-4">Upload Document</h3>
+            
+            <div className={`border-2 border-dashed rounded-lg p-6 text-center ${selectedFile ? (darkMode ? 'border-blue-500' : 'border-blue-400') : (darkMode ? 'border-gray-600' : 'border-gray-300')}`}>
+              <input 
+                type="file" 
+                id="file-upload" 
+                className="hidden" 
+                onChange={handleFileChange} 
+                accept=".pdf,.doc,.docx,.txt,.csv,.xlsx"
+              />
+              
+              {!selectedFile ? (
+                <label htmlFor="file-upload" className="cursor-pointer">
+                  <Upload size={36} className="mx-auto mb-2 text-gray-400" />
+                  <p className={darkMode ? 'text-gray-300' : 'text-gray-600'}>Click to select or drag a document here</p>
+                  <p className="text-xs mt-2 text-gray-500">Supported formats: PDF, DOC, DOCX, TXT, CSV, XLSX</p>
+                </label>
+              ) : (
+                <div>
+                  <p className={`text-lg ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>{selectedFile.name}</p>
+                  <p className="text-sm text-gray-500">{(selectedFile.size / 1024).toFixed(1)} KB</p>
+                  <button 
+                    className="text-red-500 text-sm mt-2"
+                    onClick={() => setSelectedFile(null)}
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            <div className="mt-6 flex justify-end space-x-3">
+              <button 
+                className={`py-2 px-4 rounded-md ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+                onClick={() => setShowUploadModal(false)}
+              >
+                Cancel
+              </button>
+              
+              <button 
+                className={`py-2 px-4 rounded-md ${darkMode ? 'bg-blue-600 hover:bg-blue-500' : 'bg-blue-500 hover:bg-blue-600'} text-white disabled:opacity-50`}
+                disabled={!selectedFile || processing}
+                onClick={handleFileUpload}
+              >
+                {processing ? 'Processing...' : 'Upload & Process'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
