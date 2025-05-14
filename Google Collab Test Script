@@ -1,0 +1,326 @@
+# Interactive Reading Card Generator - Google Colab Test
+# This notebook demonstrates the core functionality of the reading card generator
+
+# Install required packages
+!pip install PyMuPDF docx2txt nltk
+
+# Import necessary libraries
+import io
+import os
+import fitz  # PyMuPDF
+import docx2txt
+import nltk
+from nltk.tokenize import sent_tokenize, word_tokenize
+from nltk.corpus import stopwords
+from google.colab import files
+import json
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from IPython.display import HTML, display
+
+# Download NLTK data
+nltk.download('punkt')
+nltk.download('stopwords')
+
+# Define text extraction functions
+def extract_text_from_pdf(pdf_bytes):
+    """Extract text from PDF bytes"""
+    text = ""
+    try:
+        with fitz.open(stream=pdf_bytes, filetype="pdf") as pdf_document:
+            for page_num in range(len(pdf_document)):
+                page = pdf_document.load_page(page_num)
+                text += page.get_text()
+    except Exception as e:
+        print(f"Error extracting text from PDF: {e}")
+    return text
+
+def extract_text_from_docx(docx_bytes):
+    """Extract text from DOCX bytes"""
+    try:
+        # Save bytes to temporary file
+        with open("temp_doc.docx", "wb") as f:
+            f.write(docx_bytes)
+        
+        # Extract text
+        text = docx2txt.process("temp_doc.docx")
+        
+        # Clean up
+        if os.path.exists("temp_doc.docx"):
+            os.remove("temp_doc.docx")
+            
+        return text
+    except Exception as e:
+        print(f"Error extracting text from DOCX: {e}")
+        return ""
+
+def extract_text_from_file(file_bytes, file_extension):
+    """Extract text based on file type"""
+    if file_extension == 'pdf':
+        return extract_text_from_pdf(file_bytes)
+    elif file_extension == 'docx':
+        return extract_text_from_docx(file_bytes)
+    elif file_extension == 'txt':
+        try:
+            return file_bytes.decode('utf-8')
+        except Exception as e:
+            print(f"Error reading text file: {e}")
+            return ""
+    return ""
+
+def generate_reading_cards(text, min_sentence_length=10):
+    """Generate reading cards from text"""
+    cards = []
+    
+    # Split text into sentences
+    sentences = sent_tokenize(text)
+    
+    # Group sentences into paragraphs (simple approach)
+    paragraphs = []
+    current_paragraph = []
+    
+    for sentence in sentences:
+        # Skip short sentences or likely headers
+        if len(sentence.split()) < min_sentence_length:
+            if current_paragraph:
+                paragraphs.append(" ".join(current_paragraph))
+                current_paragraph = []
+            continue
+            
+        current_paragraph.append(sentence)
+        
+        # If paragraph gets too long, split it
+        if len(current_paragraph) >= 5:
+            paragraphs.append(" ".join(current_paragraph))
+            current_paragraph = []
+    
+    # Add any remaining paragraph
+    if current_paragraph:
+        paragraphs.append(" ".join(current_paragraph))
+    
+    # Generate cards from paragraphs
+    for i, paragraph in enumerate(paragraphs):
+        if len(paragraph.split()) < min_sentence_length:
+            continue
+            
+        # Identify potential keywords
+        words = word_tokenize(paragraph.lower())
+        stop_words = set(stopwords.words('english'))
+        keywords = [word for word in words if word.isalnum() and word not in stop_words]
+        
+        # Get top 5 most common words as keywords
+        keyword_freq = {}
+        for word in keywords:
+            keyword_freq[word] = keyword_freq.get(word, 0) + 1
+        
+        top_keywords = sorted(keyword_freq.items(), key=lambda x: x[1], reverse=True)[:5]
+        top_keywords = [word for word, _ in top_keywords]
+        
+        cards.append({
+            'id': i,
+            'content': paragraph,
+            'keywords': top_keywords
+        })
+    
+    return cards
+
+# Function to upload a file and process it
+def upload_and_process_file():
+    """Upload a file and process it into reading cards"""
+    print("Please upload a PDF, DOCX, or TXT file")
+    uploaded = files.upload()
+    
+    for filename, file_bytes in uploaded.items():
+        file_extension = filename.split('.')[-1].lower()
+        
+        if file_extension not in ['pdf', 'docx', 'txt']:
+            print(f"Unsupported file type: {file_extension}")
+            continue
+        
+        print(f"Processing {filename}...")
+        
+        # Extract text
+        extracted_text = extract_text_from_file(file_bytes, file_extension)
+        
+        if not extracted_text:
+            print("Could not extract text from the file")
+            continue
+        
+        # Generate reading cards
+        cards = generate_reading_cards(extracted_text)
+        
+        print(f"Generated {len(cards)} reading cards")
+        
+        # Display statistics
+        display_card_statistics(cards)
+        
+        # Display a few sample cards
+        display_sample_cards(cards)
+        
+        return cards
+    
+    return None
+
+# Function to display card statistics
+def display_card_statistics(cards):
+    """Display statistics about the generated cards"""
+    if not cards:
+        print("No cards to analyze")
+        return
+    
+    # Calculate statistics
+    card_lengths = [len(card['content'].split()) for card in cards]
+    keyword_counts = [len(card['keywords']) for card in cards]
+    
+    # Create a dataframe for statistics
+    stats = {
+        'Total Cards': len(cards),
+        'Average Words Per Card': np.mean(card_lengths),
+        'Min Words Per Card': np.min(card_lengths),
+        'Max Words Per Card': np.max(card_lengths),
+        'Average Keywords Per Card': np.mean(keyword_counts)
+    }
+    
+    stats_df = pd.DataFrame([stats])
+    display(stats_df)
+    
+    # Plot word count distribution
+    plt.figure(figsize=(10, 6))
+    plt.hist(card_lengths, bins=20, color='skyblue', edgecolor='black')
+    plt.title('Distribution of Words per Card')
+    plt.xlabel('Word Count')
+    plt.ylabel('Number of Cards')
+    plt.grid(True, alpha=0.3)
+    plt.show()
+
+# Function to display sample cards
+def display_sample_cards(cards, num_samples=3):
+    """Display a few sample cards with HTML formatting"""
+    if not cards:
+        print("No cards to display")
+        return
+    
+    num_to_display = min(num_samples, len(cards))
+    sample_indices = np.linspace(0, len(cards)-1, num_to_display, dtype=int)
+    
+    for idx in sample_indices:
+        card = cards[idx]
+        
+        # Create HTML for card display
+        card_html = f"""
+        <div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin: 15px 0; background-color: #f9f9f9;">
+            <h3 style="margin-top: 0;">Card #{card['id'] + 1}</h3>
+            <p style="margin-bottom: 10px;">{card['content']}</p>
+            <div>
+                <strong>Keywords: </strong>
+                {"".join([f'<span style="background-color: #e6f3ff; padding: 3px 8px; border-radius: 12px; margin-right: 5px;">{keyword}</span>' for keyword in card['keywords']])}
+            </div>
+        </div>
+        """
+        display(HTML(card_html))
+
+# Function to simulate using the cards in study mode
+def interactive_card_demo(cards):
+    """Simulate an interactive card study session"""
+    if not cards or len(cards) == 0:
+        print("No cards available for study")
+        return
+    
+    # Create a simple interactive widget for card navigation
+    import ipywidgets as widgets
+    from IPython.display import display, clear_output
+    
+    current_card_idx = 0
+    show_content = False
+    learned_cards = set()
+    
+    def show_card():
+        clear_output(wait=True)
+        card = cards[current_card_idx]
+        
+        # Create card HTML
+        card_status = "✓ Learned" if current_card_idx in learned_cards else "Not learned yet"
+        card_html = f"""
+        <div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin: 15px 0; background-color: #f9f9f9;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin-top: 0;">Card #{card['id'] + 1}</h3>
+                <span style="color: {'green' if current_card_idx in learned_cards else 'gray'};">{card_status}</span>
+            </div>
+            
+            {'<p style="margin-bottom: 10px;">' + card['content'] + '</p>' if show_content else '<p style="color: #888; font-style: italic;">(Content hidden - click "Show Content" to reveal)</p>'}
+            
+            <div>
+                <strong>Keywords: </strong>
+                {"".join([f'<span style="background-color: #e6f3ff; padding: 3px 8px; border-radius: 12px; margin-right: 5px;">{keyword}</span>' for keyword in card['keywords']])}
+            </div>
+        </div>
+        <p>Card {current_card_idx + 1} of {len(cards)}</p>
+        """
+        display(HTML(card_html))
+        
+        # Display buttons
+        display(widgets.HBox([prev_button, next_button]))
+        display(widgets.HBox([toggle_content_button, toggle_learned_button]))
+    
+    def on_prev_button_clicked(b):
+        nonlocal current_card_idx, show_content
+        current_card_idx = max(0, current_card_idx - 1)
+        show_content = False
+        show_card()
+    
+    def on_next_button_clicked(b):
+        nonlocal current_card_idx, show_content
+        current_card_idx = min(len(cards) - 1, current_card_idx + 1)
+        show_content = False
+        show_card()
+    
+    def on_toggle_content_clicked(b):
+        nonlocal show_content
+        show_content = not show_content
+        toggle_content_button.description = "Hide Content" if show_content else "Show Content"
+        show_card()
+    
+    def on_toggle_learned_clicked(b):
+        nonlocal learned_cards
+        if current_card_idx in learned_cards:
+            learned_cards.remove(current_card_idx)
+        else:
+            learned_cards.add(current_card_idx)
+        show_card()
+    
+    # Create buttons
+    prev_button = widgets.Button(description="Previous Card")
+    next_button = widgets.Button(description="Next Card")
+    toggle_content_button = widgets.Button(description="Show Content")
+    toggle_learned_button = widgets.Button(description="Toggle Learned")
+    
+    # Set up button callbacks
+    prev_button.on_click(on_prev_button_clicked)
+    next_button.on_click(on_next_button_clicked)
+    toggle_content_button.on_click(on_toggle_content_clicked)
+    toggle_learned_button.on_click(on_toggle_learned_clicked)
+    
+    # Show first card
+    show_card()
+
+# Main execution
+print("Interactive Reading Card Generator - Demo")
+print("-----------------------------------------")
+print("This notebook demonstrates the core functionality of the Interactive Reading Card Generator.")
+print("You'll be able to upload a document, convert it to reading cards, and interact with those cards.")
+print()
+
+# Upload and process a file
+cards = upload_and_process_file()
+
+# If cards were generated, offer interactive demo
+if cards and len(cards) > 0:
+    print("\nWould you like to try the interactive study mode with these cards?")
+    response = input("Enter 'yes' to continue: ")
+    if response.lower() == 'yes':
+        interactive_card_demo(cards)
+
+print("\nDemo complete! This functionality would be available in the full web application.")
+print("The full application includes additional features like persistent card storage,")
+print("note taking, highlighting, and more interactive study features.")
